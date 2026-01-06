@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>アンケート集計</title>
+
+<style>
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background: #e0f7fa;
+  padding: 20px;
+}
+
+h2, h3 { color: #007bbd; }
+
+.item {
+  background: #fff;
+  padding: 15px;
+  margin-bottom: 20px;
+  border-radius: 12px;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+}
+
+.item-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.item-title,
+.item-total {
+  font-weight: bold;
+  color: #007bbd;
+}
+
+.clear-btn {
+  width: 60px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: #b2ebf2;
+  color: #d50000;
+  border: none;
+}
+
+.table {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+}
+
+.cell { text-align: center; }
+
+.btn-wrap {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-plus {
+  flex: 1;
+  background: #4dd0e1;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.btn-minus {
+  width: 26px;
+  background: #ffcdd2;
+  color: #b71c1c;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.count { font-weight: bold; }
+.percent { font-size: 12px; color: #006064; }
+
+/* コメント */
+#comment-input {
+  width: 100%;
+  max-width: 600px;
+  padding: 8px;
+}
+
+#comment-submit,
+#export-csv {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #4dd0e1;
+  color: #fff;
+  cursor: pointer;
+}
+
+#comment-list {
+  margin-top: 15px;
+  background: #fff;
+  padding: 10px;
+  border-radius: 12px;
+}
+
+.comment-item {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #b2ebf2;
+  padding: 6px 0;
+}
+
+.comment-delete {
+  cursor: pointer;
+  color: #007bbd;
+}
+.comment-delete:hover { color: #d50000; }
+</style>
+</head>
+
+<body>
+
+<h2>アンケート集計</h2>
+<div id="container"></div>
+
+<button id="export-csv">Excel / CSV出力</button>
+
+<h3>コメント</h3>
+<textarea id="comment-input" rows="3"></textarea><br>
+<button id="comment-submit">Submit</button>
+<div id="comment-list"></div>
+
+<script>
+const ITEM_COUNT = 7;
+const SCALE_COUNT = 8;
+const STORAGE_KEY = "survey_data_v1";
+
+/* ===== 保存データ ===== */
+function loadData() {
+  const d = localStorage.getItem(STORAGE_KEY);
+  return d ? JSON.parse(d) : {
+    items: Array.from({ length: ITEM_COUNT }, () => ({
+      counts: Array(SCALE_COUNT).fill(0),
+      total: 0
+    })),
+    comments: []
+  };
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(surveyData));
+}
+
+const surveyData = loadData();
+const container = document.getElementById("container");
+
+/* ===== 集計 ===== */
+surveyData.items.forEach((data, i) => {
+  const item = document.createElement("div");
+  item.className = "item";
+  item.innerHTML = `
+    <div class="item-header">
+      <div class="item-title">項目 ${i + 1}</div>
+      <div class="item-total">総回答数: <span>0</span></div>
+      <button class="clear-btn">クリア</button>
+    </div>
+    <div class="table"></div>
+  `;
+
+  const table = item.querySelector(".table");
+  const totalSpan = item.querySelector(".item-total span");
+  const countSpans = [];
+  const percentSpans = [];
+
+  function update() {
+    totalSpan.textContent = data.total;
+    data.counts.forEach((c, s) => {
+      countSpans[s].textContent = c;
+      percentSpans[s].textContent =
+        data.total === 0 ? "0.0%" : (c / data.total * 100).toFixed(1) + "%";
+    });
+    saveData();
+  }
+
+  data.counts.forEach((_, s) => {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+
+    const wrap = document.createElement("div");
+    wrap.className = "btn-wrap";
+
+    const plus = document.createElement("button");
+    plus.className = "btn-plus";
+    plus.textContent = s + 1;
+
+    const minus = document.createElement("button");
+    minus.className = "btn-minus";
+    minus.textContent = "−";
+
+    const count = document.createElement("div");
+    count.className = "count";
+
+    const percent = document.createElement("div");
+    percent.className = "percent";
+
+    plus.onclick = () => {
+      data.counts[s]++;
+      data.total++;
+      update();
+    };
+
+    minus.onclick = () => {
+      if (data.counts[s] > 0) {
+        data.counts[s]--;
+        data.total--;
+        update();
+      }
+    };
+
+    countSpans.push(count);
+    percentSpans.push(percent);
+
+    wrap.appendChild(plus);
+    wrap.appendChild(minus);
+    cell.appendChild(wrap);
+    cell.appendChild(count);
+    cell.appendChild(percent);
+    table.appendChild(cell);
+  });
+
+  item.querySelector(".clear-btn").onclick = () => {
+    if (!confirm("この項目の集計をすべてクリアしますか？")) return;
+    data.counts.fill(0);
+    data.total = 0;
+    update();
+  };
+
+  update();
+  container.appendChild(item);
+});
+
+/* ===== コメント ===== */
+const commentInput = document.getElementById("comment-input");
+const commentList = document.getElementById("comment-list");
+
+function renderComments() {
+  commentList.innerHTML = "";
+  surveyData.comments.forEach((text, idx) => {
+    const d = document.createElement("div");
+    d.className = "comment-item";
+    d.innerHTML = `<span>${text}</span><span class="comment-delete">×</span>`;
+    d.querySelector(".comment-delete").onclick = () => {
+      surveyData.comments.splice(idx, 1);
+      saveData();
+      renderComments();
+    };
+    commentList.appendChild(d);
+  });
+}
+
+document.getElementById("comment-submit").onclick = () => {
+  if (!commentInput.value.trim()) return;
+  surveyData.comments.push(commentInput.value);
+  saveData();
+  renderComments();
+  commentInput.value = "";
+};
+
+renderComments();
+
+/* ===== CSV出力（コメント ""なし） ===== */
+document.getElementById("export-csv").onclick = () => {
+  let csv = "";
+
+  surveyData.items.forEach((item, i) => {
+    csv += `項目 ${i + 1}\n段階,件数,％\n`;
+    item.counts.forEach((c, s) => {
+      const p = item.total === 0 ? "0.0%" : (c / item.total * 100).toFixed(1) + "%";
+      csv += `${s + 1},${c},${p}\n`;
+    });
+    csv += "\n";
+  });
+
+  csv += "コメント\n";
+  surveyData.comments.forEach(c => {
+    csv += c + "\n";
+  });
+
+  const bom = "\uFEFF";
+  const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "survey_export.csv";
+  a.click();
+};
+</script>
+
+</body>
+</html>
